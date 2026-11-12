@@ -1,0 +1,6 @@
+# Testing requirements
+pytest
+pytest-cov
+pytest-localftpserver
+pytest-httpserver
+coverage

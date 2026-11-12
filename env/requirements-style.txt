@@ -1,0 +1,3 @@
+# Style and type checks
+ruff
+burocrata

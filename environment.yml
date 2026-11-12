@@ -1,0 +1,38 @@
+name: pooch
+channels:
+    - conda-forge
+    - defaults
+dependencies:
+    - python==3.14
+    - pip
+    # Run
+    - requests
+    - packaging
+    - platformdirs
+    # Optional dependencies
+    - tqdm>=4.41.0,<5.0.0
+    - paramiko>=2.7.0
+    - python-xxhash>=1.4.3  # in conda-forge python-xxhash is the python pkg
+    - xxhash # this is the xxHash library in conda-forge
+    # Build
+    - python-build
+    # Test
+    - pytest
+    - pytest-cov
+    - pytest-localftpserver
+    - pytest-httpserver
+    - coverage
+    # Documentation
+    - sphinx==7.2.*
+    - sphinx-book-theme==1.1.*
+    - sphinx-design==0.5.*
+    # Style
+    - ruff
+    # Types
+    - mypy
+    - types-requests
+    - types-tqdm
+    - types-paramiko
+    - types-xxhash
+    - pip:
+      - burocrata
