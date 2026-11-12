@@ -1,0 +1,7 @@
+[
+ {"properties": {"a": ["1", "2"], "b": ["test"]}},
+ {"properties": {"a": ["1", "2"], "b": ["test"]}},
+ {"properties": {"a": ["1", "2"], "b": ["test"]}},
+ {"properties": {"a": ["2", "1"], "b": ["test"]}}
+]
+
