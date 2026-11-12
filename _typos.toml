@@ -1,0 +1,19 @@
+[default.extend-words]
+ba = "ba"
+ot = "ot"
+pn = "pn"
+siz = "siz"
+parm = "parm"
+universite = "universite"
+womens = "womens"
+observ = "observ"
+writeable = "writeable"
+
+[default]
+extend-ignore-re = [
+    "np\\.\\w",
+    "`eval`uable"
+]
+
+[files]
+extend-exclude = ["**/_*_dict.py"]
