@@ -1,0 +1,182 @@
+import pytest
+
+from sql_metadata import InvalidQueryDefinition, Parser, QueryType
+
+
+def test_insert_query():
+    queries = [
+        "INSERT IGNORE /* foo */ INTO bar VALUES (1, '123', '2017-01-01');",
+        "/* foo */ INSERT IGNORE INTO bar VALUES (1, '123', '2017-01-01');",
+        "-- foo\nINSERT IGNORE INTO bar VALUES (1, '123', '2017-01-01');",
+        "# foo\nINSERT IGNORE INTO bar VALUES (1, '123', '2017-01-01');",
+    ]
+
+    for query in queries:
+        assert QueryType.INSERT == Parser(query).query_type
+
+
+def test_select_query():
+    queries = [
+        "SELECT /* foo */ foo FROM bar",
+        "/* foo */ SELECT foo FROM bar",
+        "-- foo\nSELECT foo FROM bar",
+        "# foo\nSELECT foo FROM bar",
+    ]
+
+    for query in queries:
+        assert QueryType.SELECT == Parser(query).query_type
+
+
+def test_delete_query():
+    queries = [
+        "{0}DELETE {0}FROM{0} foo;{0}",
+        "{0}DELETE{0} foo {0}FROM {0}foo{0} INNER {0} JOIN {0} bar ON {0} foo.id = bar.foo_id;{0}",
+    ]
+
+    for query in queries:
+        for comment in ["", "/* foo */", "\n--foo\n", "\n# foo\n"]:
+            assert QueryType.DELETE == Parser(query.format(comment)).query_type
+
+
+def test_drop_table_query():
+    queries = [
+        "{0}DROP TABLE foo;{0}",
+    ]
+
+    for query in queries:
+        for comment in ["", "/* foo */", "\n--foo\n", "\n# foo\n"]:
+            assert QueryType.DROP == Parser(query.format(comment)).query_type
+
+
+def test_unsupported_query(caplog):
+    queries = [
+        "FOO BAR LONG QUERY WITH MANY TOKENS",
+        "DO SOMETHING LONG QUERY",
+    ]
+
+    for query in queries:
+        with pytest.raises(InvalidQueryDefinition) as ex:
+            _ = Parser(query).query_type
+
+        assert "Not supported query type!" in str(ex.value)
+
+        # assert the SQL query is not logged
+        # https://docs.pytest.org/en/stable/how-to/logging.html#caplog-fixture
+        assert f"Not supported query type: {query}" not in caplog.text, (
+            "The SQL query should not be logged"
+        )
+        assert f"Not supported query type: {query[:8]}" in caplog.text, (
+            "The SQL query should be trimmed when logged"
+        )
+
+
+def test_empty_query():
+    queries = ["", "/* empty query */"]
+
+    for query in queries:
+        with pytest.raises(InvalidQueryDefinition) as ex:
+            _ = Parser(query).query_type
+
+        assert "Empty queries are not supported!" in str(ex.value)
+
+
+def test_redundant_parentheses():
+    query = """
+    (select c, d from ab)
+    """
+    parser = Parser(query)
+    assert parser.query_type == QueryType.SELECT
+
+
+def test_multiple_redundant_parentheses():
+    query = """
+    ((update ac set ab = 1))
+    """
+    parser = Parser(query)
+    assert parser.query_type == QueryType.UPDATE
+
+
+def test_multiple_redundant_parentheses_create():
+    query = """
+    ((create table aa (ac int primary key)))
+    """
+    parser = Parser(query)
+    assert parser.query_type == QueryType.CREATE
+
+
+def test_hive_create_function():
+    query = """
+        CREATE FUNCTION simple_udf AS 'com.example.hive.udf.SimpleUDF' 
+        USING JAR 'hdfs:///user/hive/udfs/simple-udf.jar'
+        WITH SERDEPROPERTIES (
+          "hive.udf.param1"="value1",
+          "hive.udf.param2"="value2"
+        );
+    """
+    parser = Parser(query)
+    assert parser.query_type == QueryType.CREATE
+
+    query = """
+        CREATE TEMPORARY FUNCTION myudf AS 'com.udf.myudf';
+    """
+    parser = Parser(query)
+    assert parser.query_type == QueryType.CREATE
+
+
+def test_merge_into_query_type():
+    # solved: https://github.com/macbre/sql-metadata/issues/354
+    query = """
+    MERGE INTO wines w
+    USING (VALUES('Chateau Lafite 2003', '24')) v
+    ON v.column1 = w.winename
+    WHEN NOT MATCHED THEN INSERT VALUES(v.column1, v.column2)
+    WHEN MATCHED THEN UPDATE SET stock = stock + v.column2
+    """
+    parser = Parser(query)
+    assert parser.query_type == QueryType.MERGE
+    assert parser.tables == ["wines"]
+    assert parser.columns == [
+        "v.column1",
+        "wines.winename",
+        "v.column2",
+        "stock",
+    ]
+    assert parser.tables_aliases == {"w": "wines"}
+
+
+def test_create_temporary_table():
+    # solved: https://github.com/macbre/sql-metadata/issues/439
+    query = "CREATE TEMPORARY TABLE tablname AS SELECT * FROM source_table"
+    parser = Parser(query)
+    assert parser.query_type == QueryType.CREATE
+    assert "tablname" in parser.tables
+    assert "source_table" in parser.tables
+    assert parser.columns == ["*"]
+
+
+def test_malformed_with_no_main_query():
+    """WITH clause not followed by a main statement is rejected."""
+    with pytest.raises(
+        InvalidQueryDefinition, match="WITH clause without a main statement"
+    ):
+        Parser("WITH cte AS (SELECT 1)").query_type
+
+
+def test_unrecognized_command_type():
+    """A query that parses as Command but isn't ALTER/CREATE."""
+    with pytest.raises(InvalidQueryDefinition, match="Not supported query type"):
+        Parser("SHOW TABLES").query_type
+
+
+def test_deeply_parenthesized_query():
+    """Triple-parenthesized SELECT parses correctly."""
+    p = Parser("(((SELECT col FROM t)))")
+    assert p.query_type == QueryType.SELECT
+    assert p.tables == ["t"]
+    assert p.columns == ["col"]
+
+
+def test_execute_command_not_supported():
+    """EXECUTE parses as Command but isn't a known type — raises ValueError."""
+    with pytest.raises(InvalidQueryDefinition, match="Not supported query type"):
+        Parser("EXECUTE sp_help").query_type
