@@ -15,7 +15,7 @@ mkdir -p .venv/tmp
 export TMPDIR="$PWD/.venv/tmp"
 uv pip install --python .venv/bin/python -r requirements-domain.lock
 uv pip install --python .venv/bin/python --no-build-isolation --no-deps -e .
-.venv/bin/python -B -m pytest -q -o addopts= -p no:cacheprovider -p pytest_socket --disable-socket -m 'not samples' -k 'not limits' tests/generic/test_base.py tests/test_pagerange.py tests/test_page_labels.py tests/test_constants.py
+.venv/bin/python -B -m pytest -q -o addopts= -p no:cacheprovider -p pytest_socket --disable-socket -m 'not samples and not enable_socket' -k 'not limits' tests/generic/test_base.py tests/test_pagerange.py tests/test_page_labels.py tests/test_constants.py
 ```
 
 The selected tests use small fixtures or in-process substitutes. They need no remote service after dependency setup.
